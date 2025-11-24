@@ -1,0 +1,33 @@
+---
+- name: Install Zabbix Agent on RHEL-based systems
+  hosts: all
+  become: true
+
+  tasks:
+
+    - name: Install Zabbix Repo
+      yum:
+        name: "https://repo.zabbix.com/zabbix/7.0/rhel/9/x86_64/zabbix-release-7.0-2.el9.noarch.rpm"
+        state: present
+
+    - name: Install Zabbix Agent
+      yum:
+        name: zabbix-agent
+        state: present
+
+    - name: Enable and start Zabbix Agent
+      systemd:
+        name: zabbix-agent
+        enabled: yes
+        state: started
+
+    - name: Configure Zabbix Server IP
+      lineinfile:
+        path: /etc/zabbix/zabbix_agentd.conf
+        regexp: '^Server='
+        line: 'Server=192.168.10.246'
+
+    - name: Restart Zabbix Agent after config change
+      systemd:
+        name: zabbix-agent
+        state: restarted
