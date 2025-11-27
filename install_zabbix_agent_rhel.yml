@@ -1,7 +1,10 @@
 ---
-- name: Install Zabbix Agent on RHEL 9 servers
-  hosts: fleet-node,manger-node        # غيّرها لو عندك group اسمه linux مثلاً
+- name: Full Zabbix Agent setup on RHEL 9 servers
+  hosts: fleet-node,manger-node      # عدّلها حسب الـ groups عندك في AWX
   become: yes
+
+  vars:
+    zabbix_server_ip: "192.168.10.246"   # IP الزبكس سيرفر عندك
 
   tasks:
     - name: Disable securityonion repo if it exists
@@ -12,7 +15,6 @@
 
     - name: Clean dnf cache
       ansible.builtin.command: dnf clean all
-      register: dnf_clean
       changed_when: false
 
     - name: Install Zabbix repository package (RHEL 9)
@@ -30,8 +32,39 @@
         name: zabbix-agent
         state: present
 
-    - name: Enable and start Zabbix agent service
+    - name: Configure Server= in zabbix_agentd.conf
+      ansible.builtin.lineinfile:
+        path: /etc/zabbix/zabbix_agentd.conf
+        regexp: '^Server='
+        line: "Server={{ zabbix_server_ip }}"
+        backup: yes
+
+    - name: Configure ServerActive= in zabbix_agentd.conf
+      ansible.builtin.lineinfile:
+        path: /etc/zabbix/zabbix_agentd.conf
+        regexp: '^ServerActive='
+        line: "ServerActive={{ zabbix_server_ip }}"
+
+    - name: Configure Hostname= in zabbix_agentd.conf (use inventory hostname)
+      ansible.builtin.lineinfile:
+        path: /etc/zabbix/zabbix_agentd.conf
+        regexp: '^Hostname='
+        line: "Hostname={{ inventory_hostname }}"
+
+    - name: Ensure firewall port 10050/tcp is open
+      ansible.builtin.firewalld:
+        port: 10050/tcp
+        permanent: true
+        state: enabled
+      ignore_errors: yes
+
+    - name: Reload firewalld
+      ansible.builtin.command: firewall-cmd --reload
+      changed_when: false
+      ignore_errors: yes
+
+    - name: Enable and restart Zabbix agent service
       ansible.builtin.systemd:
         name: zabbix-agent
-        state: started
+        state: restarted
         enabled: yes
